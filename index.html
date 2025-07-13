@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Análisis de Suelo</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Custom styles for animations and scrollbar */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 8px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-green-300 to-blue-500">
+
+    <!-- App Container -->
+    <div id="app-container" class="min-h-screen flex items-center justify-center p-4">
+
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="text-white text-2xl font-bold flex flex-col items-center">
+            <svg class="animate-spin -ml-1 mr-3 h-10 w-10 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Cargando aplicación...
+        </div>
+
+        <!-- Vivero Login/Selection Screen -->
+        <div id="vivero-login-screen" class="hidden bg-white p-8 rounded-2xl shadow-xl max-w-md w-full space-y-6 text-center">
+            <h1 class="text-3xl font-extrabold text-gray-800 mb-4">Inicia Sesión con tu Vivero</h1>
+            <p class="text-gray-600 mb-6">Ingresa los detalles de tu vivero o crea uno nuevo.</p>
+            <div id="login-error" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl relative" role="alert"></div>
+
+            <div class="space-y-4">
+                <div>
+                    <label for="viveroNameInput" class="block text-gray-700 text-sm font-bold mb-2 text-left">Nombre del Vivero</label>
+                    <input type="text" id="viveroNameInput" placeholder="Ej: Jardín Secreto" class="shadow appearance-none border rounded-xl w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition duration-200">
+                </div>
+                <div>
+                    <label for="apellidoInput" class="block text-gray-700 text-sm font-bold mb-2 text-left">Tu Apellido</label>
+                    <input type="text" id="apellidoInput" placeholder="Ej: Pérez" class="shadow appearance-none border rounded-xl w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition duration-200">
+                </div>
+                <button id="login-create-vivero-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
+                    Iniciar Sesión / Crear Vivero
+                </button>
+            </div>
+
+            <div id="vivero-list-container" class="hidden space-y-3 p-4 border rounded-xl bg-gray-50 mt-6">
+                <h2 class="text-xl font-bold text-gray-700 mb-3">O Selecciona un Vivero Existente:</h2>
+                <div id="vivero-list"></div>
+            </div>
+        </div>
+
+        <!-- Main App Screen -->
+        <div id="main-app-screen" class="hidden bg-white p-8 rounded-2xl shadow-xl max-w-lg w-full space-y-6 relative">
+            <button id="logout-btn" class="absolute top-4 left-4 bg-gray-500 hover:bg-gray-600 text-white text-sm font-bold py-2 px-3 rounded-lg shadow-md transition-colors duration-200 z-10">
+                Cerrar Sesión
+            </button>
+            <h1 class="text-4xl font-extrabold text-gray-800 text-center mb-2 mt-10">
+                <span class="inline-block transform -rotate-6 text-green-600">🌱</span>
+                <span class="ml-2">Análisis de Suelo</span>
+            </h1>
+            <p id="active-vivero-name" class="text-center text-gray-700 text-lg font-semibold mb-4"></p>
+            <div id="user-id-display" class="text-sm text-gray-500 text-center mb-4 p-2 bg-gray-100 rounded-lg"></div>
+            
+            <!-- Watering Reminder -->
+            <div id="watering-reminder" class="hidden bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-md mb-4 flex items-center justify-between animate-fade-in">
+                <div>
+                    <p class="font-bold text-lg">¡Es hora de regar tu suelo!</p>
+                    <p id="reminder-frequency" class="text-sm"></p>
+                </div>
+                <button id="mark-watered-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
+                    Marcar como regado
+                </button>
+            </div>
+
+            <!-- Analysis View -->
+            <div id="analysis-view">
+                <div class="space-y-4">
+                    <div>
+                        <label for="humidity" class="block text-gray-700 text-sm font-bold mb-2">Humedad del suelo (%)</label>
+                        <input type="number" id="humidity" placeholder="Ej: 60" min="0" max="100" class="shadow appearance-none border rounded-xl w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition duration-200">
+                    </div>
+                    <div>
+                        <label for="ph" class="block text-gray-700 text-sm font-bold mb-2">pH del suelo (0-14)</label>
+                        <input type="number" id="ph" placeholder="Ej: 6.5" step="0.1" min="0" max="14" class="shadow appearance-none border rounded-xl w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition duration-200">
+                    </div>
+                    <div id="analysis-error" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl relative" role="alert"></div>
+                    <button id="analyze-soil-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
+                        Analizar Suelo
+                    </button>
+                </div>
+                <!-- Results Section -->
+                <div id="results-section" class="hidden mt-8 pt-6 border-t-2 border-gray-200 space-y-6 animate-fade-in">
+                    <h2 class="text-2xl font-bold text-gray-800">Resultados del Último Análisis:</h2>
+                    <div id="overall-status" class="flex items-center justify-center p-4 rounded-lg shadow-md text-white font-bold text-xl"></div>
+                    <div id="watering-recommendation" class="hidden bg-blue-50 border-l-4 border-blue-500 text-blue-800 p-4 rounded-lg shadow-sm"></div>
+                    <div id="floral-suggestions" class="hidden bg-pink-50 border-l-4 border-pink-500 text-pink-800 p-4 rounded-lg shadow-sm"></div>
+                    <div id="garden-suggestions" class="hidden bg-green-50 border-l-4 border-green-500 text-green-800 p-4 rounded-lg shadow-sm"></div>
+                </div>
+                <button id="view-history-btn" class="w-full mt-6 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-gray-300">
+                    Ver Historial (0)
+                </button>
+            </div>
+
+            <!-- History View -->
+            <div id="history-view" class="hidden space-y-6">
+                <h2 class="text-2xl font-bold text-gray-800 text-center">Historial de Análisis</h2>
+                <button id="back-to-analysis-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-300">
+                    Volver al Análisis
+                </button>
+                <!-- Charts -->
+                <div class="mt-6 p-4 bg-gray-100 rounded-lg shadow-inner">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">Tendencia de pH</h3>
+                    <canvas id="ph-chart"></canvas>
+                    <p id="ph-chart-placeholder" class="text-center text-gray-500 italic">No hay suficientes datos para mostrar la tendencia.</p>
+                </div>
+                <div class="mt-6 p-4 bg-gray-100 rounded-lg shadow-inner">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">Tendencia de Humedad (%)</h3>
+                    <canvas id="humidity-chart"></canvas>
+                    <p id="humidity-chart-placeholder" class="text-center text-gray-500 italic">No hay suficientes datos para mostrar la tendencia.</p>
+                </div>
+                <!-- History List -->
+                <div id="history-list" class="space-y-4 max-h-80 overflow-y-auto pr-2 scrollbar-thin"></div>
+            </div>
+
+            <p class="text-xs text-gray-400 mt-8 text-center">
+                <span class="font-bold">Nota:</span> Esta es una aplicación de demostración/simulación. Las recomendaciones se basan en la entrada manual y la IA. Los datos se guardan en tu cuenta de Firestore.
+            </p>
+        </div>
+
+        <!-- Delete Confirmation Modal -->
+        <div id="delete-confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white p-6 rounded-xl shadow-lg text-center max-w-sm w-full">
+                <h3 class="text-lg font-bold mb-4">Confirmar Eliminación</h3>
+                <p class="mb-6">¿Estás seguro de que quieres eliminar esta entrada del historial?</p>
+                <div class="flex justify-around gap-4">
+                    <button id="cancel-delete-btn" class="px-6 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition duration-200">Cancelar</button>
+                    <button id="confirm-delete-btn" class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200">Eliminar</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, deleteDoc, doc, updateDoc, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Global State and DOM Element References ---
+        let db, auth, userId, selectedViveroId, selectedViveroName;
+        let viverosList = [];
+        let historyData = [];
+        let itemToDelete = null;
+        let phChartInstance, humidityChartInstance;
+
+        const loadingScreen = document.getElementById('loading-screen');
+        const viveroLoginScreen = document.getElementById('vivero-login-screen');
+        const mainAppScreen = document.getElementById('main-app-screen');
+        const analysisView = document.getElementById('analysis-view');
+        const historyView = document.getElementById('history-view');
+        
+        const viveroNameInput = document.getElementById('viveroNameInput');
+        const apellidoInput = document.getElementById('apellidoInput');
+        const loginCreateBtn = document.getElementById('login-create-vivero-btn');
+        const viveroListContainer = document.getElementById('vivero-list-container');
+        const viveroListDiv = document.getElementById('vivero-list');
+        const loginErrorDiv = document.getElementById('login-error');
+
+        const logoutBtn = document.getElementById('logout-btn');
+        const activeViveroNameP = document.getElementById('active-vivero-name');
+        const userIdDisplay = document.getElementById('user-id-display');
+        
+        const humidityInput = document.getElementById('humidity');
+        const phInput = document.getElementById('ph');
+        const analyzeSoilBtn = document.getElementById('analyze-soil-btn');
+        const analysisErrorDiv = document.getElementById('analysis-error');
+        
+        const resultsSection = document.getElementById('results-section');
+        const overallStatusDiv = document.getElementById('overall-status');
+        const wateringRecommendationDiv = document.getElementById('watering-recommendation');
+        const floralSuggestionsDiv = document.getElementById('floral-suggestions');
+        const gardenSuggestionsDiv = document.getElementById('garden-suggestions');
+        
+        const viewHistoryBtn = document.getElementById('view-history-btn');
+        const backToAnalysisBtn = document.getElementById('back-to-analysis-btn');
+        const historyListDiv = document.getElementById('history-list');
+        
+        const deleteModal = document.getElementById('delete-confirm-modal');
+        const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+
+        const wateringReminder = document.getElementById('watering-reminder');
+        const reminderFrequencyP = document.getElementById('reminder-frequency');
+        const markWateredBtn = document.getElementById('mark-watered-btn');
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        // --- UI Control Functions ---
+        function showScreen(screen) {
+            loadingScreen.classList.add('hidden');
+            viveroLoginScreen.classList.add('hidden');
+            mainAppScreen.classList.add('hidden');
+            screen.classList.remove('hidden');
+        }
+
+        function setButtonLoading(button, isLoading, text = 'Analizando...') {
+            if (isLoading) {
+                button.disabled = true;
+                button.innerHTML = `
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    ${text}`;
+            } else {
+                button.disabled = false;
+                button.innerHTML = button.dataset.originalText;
+            }
+        }
+
+        function showError(div, message) {
+            div.innerHTML = `<strong class="font-bold">¡Error!</strong> <span class="block sm:inline">${message}</span>`;
+            div.classList.remove('hidden');
+        }
+
+        function hideError(div) {
+            div.classList.add('hidden');
+        }
+
+        // --- Render Functions ---
+        function renderViveroList() {
+            viveroListDiv.innerHTML = '';
+            if (viverosList.length > 0) {
+                viverosList.forEach(vivero => {
+                    const viveroEl = document.createElement('div');
+                    viveroEl.className = 'flex items-center justify-between bg-white p-3 rounded-lg shadow-sm border border-gray-200';
+                    viveroEl.innerHTML = `
+                        <span class="font-semibold text-gray-800">${vivero.name}</span>
+                        <div class="flex space-x-2">
+                            <button data-id="${vivero.id}" data-name="${vivero.name}" class="select-vivero-btn px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 text-sm">Seleccionar</button>
+                            <button data-id="${vivero.id}" class="delete-vivero-btn px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition duration-200 text-sm">Eliminar</button>
+                        </div>
+                    `;
+                    viveroListDiv.appendChild(viveroEl);
+                });
+                viveroListContainer.classList.remove('hidden');
+            } else {
+                viveroListContainer.classList.add('hidden');
+            }
+            // Add event listeners after rendering
+            document.querySelectorAll('.select-vivero-btn').forEach(btn => btn.addEventListener('click', handleSelectVivero));
+            document.querySelectorAll('.delete-vivero-btn').forEach(btn => btn.addEventListener('click', handleDeleteVivero));
+        }
+
+        function renderHistory() {
+            historyListDiv.innerHTML = '';
+            viewHistoryBtn.textContent = `Ver Historial (${historyData.length})`;
+
+            if (historyData.length === 0) {
+                historyListDiv.innerHTML = `<p class="text-center text-gray-500 italic mt-4">No hay análisis guardados aún.</p>`;
+                return;
+            }
+
+            historyData.forEach(item => {
+                const date = item.timestamp ? new Date(item.timestamp.seconds * 1000).toLocaleString('es-ES') : 'N/A';
+                const itemEl = document.createElement('div');
+                itemEl.className = 'bg-gray-50 p-4 rounded-xl shadow-md border border-gray-200 relative';
+                
+                let floralHtml = '';
+                if (item.floralSuggestions && item.floralSuggestions.length > 0) {
+                    floralHtml = `
+                        <div class="text-gray-700 mt-2">
+                            <span class="font-semibold">Plantas Florales Sugeridas:</span>
+                            <ul class="list-disc list-inside text-gray-700 space-y-1 text-sm">
+                                ${item.floralSuggestions.map(p => `<li><span class="font-semibold">${p.name}</span>: ${p.growth_time}</li>`).join('')}
+                            </ul>
+                        </div>`;
+                }
+                
+                let gardenHtml = '';
+                if (item.gardenSuggestions && item.gardenSuggestions.length > 0) {
+                    gardenHtml = `
+                        <div class="text-gray-700 mt-2">
+                            <span class="font-semibold">Plantas de Huerta Sugeridas:</span>
+                            <ul class="list-disc list-inside text-gray-700 space-y-1 text-sm">
+                                ${item.gardenSuggestions.map(p => `<li><span class="font-semibold">${p.name}</span>: ${p.growth_time}</li>`).join('')}
+                            </ul>
+                        </div>`;
+                }
+
+                itemEl.innerHTML = `
+                    <button data-id="${item.id}" class="delete-history-btn absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 focus:outline-none focus:ring-2 focus:ring-red-300" aria-label="Eliminar entrada">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                    <p class="text-sm text-gray-600 mb-2"><span class="font-semibold">Fecha:</span> ${date}</p>
+                    <p class="text-gray-700"><span class="font-semibold">Humedad:</span> ${item.humidity}% | <span class="font-semibold">pH:</span> ${item.pH}</p>
+                    <p class="text-gray-700 mt-2"><span class="font-semibold">Riego:</span> ${item.wateringRecommendation}</p>
+                    ${floralHtml}
+                    ${gardenHtml}
+                `;
+                historyListDiv.appendChild(itemEl);
+            });
+            document.querySelectorAll('.delete-history-btn').forEach(btn => btn.addEventListener('click', handleDeleteHistoryClick));
+        }
+        
+        function updateCharts() {
+            const chartData = historyData.slice().reverse().map(item => ({
+                date: item.timestamp ? new Date(item.timestamp.seconds * 1000).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) : 'N/A',
+                pH: item.pH,
+                humidity: item.humidity,
+            }));
+
+            const phCanvas = document.getElementById('ph-chart');
+            const humidityCanvas = document.getElementById('humidity-chart');
+            const phPlaceholder = document.getElementById('ph-chart-placeholder');
+            const humidityPlaceholder = document.getElementById('humidity-chart-placeholder');
+
+            if (phChartInstance) phChartInstance.destroy();
+            if (humidityChartInstance) humidityChartInstance.destroy();
+
+            if (chartData.length > 1) {
+                phCanvas.classList.remove('hidden');
+                humidityCanvas.classList.remove('hidden');
+                phPlaceholder.classList.add('hidden');
+                humidityPlaceholder.classList.add('hidden');
+
+                const labels = chartData.map(d => d.date);
+
+                phChartInstance = new Chart(phCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'pH',
+                            data: chartData.map(d => d.pH),
+                            borderColor: '#8884d8',
+                            backgroundColor: 'rgba(136, 132, 216, 0.1)',
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: { scales: { y: { beginAtZero: false, max: 14 } } }
+                });
+
+                humidityChartInstance = new Chart(humidityCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Humedad (%)',
+                            data: chartData.map(d => d.humidity),
+                            borderColor: '#82ca9d',
+                            backgroundColor: 'rgba(130, 202, 157, 0.1)',
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: { scales: { y: { beginAtZero: true, max: 100 } } }
+                });
+            } else {
+                phCanvas.classList.add('hidden');
+                humidityCanvas.classList.add('hidden');
+                phPlaceholder.classList.remove('hidden');
+                humidityPlaceholder.classList.remove('hidden');
+            }
+        }
+
+        // --- Firebase Logic ---
+        async function initializeFirebase() {
+            try {
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                    } else {
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                            userId = auth.currentUser?.uid || crypto.randomUUID();
+                        } catch (anonError) {
+                            console.error("Error signing in:", anonError);
+                            userId = crypto.randomUUID();
+                        }
+                    }
+                    setupViveroListener();
+                    showScreen(viveroLoginScreen);
+                });
+            } catch (e) {
+                console.error("Error initializing Firebase:", e);
+                showError(loginErrorDiv, "Error al inicializar la base de datos. Recarga la página.");
+            }
+        }
+
+        function setupViveroListener() {
+            if (!db || !userId) return;
+            const viverosColRef = collection(db, `artifacts/${appId}/users/${userId}/viveros`);
+            const q = query(viverosColRef, orderBy('creationTimestamp', 'asc'));
+
+            onSnapshot(q, (snapshot) => {
+                viverosList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderViveroList();
+            }, (err) => {
+                console.error("Error loading viveros:", err);
+                showError(loginErrorDiv, "Error al cargar la lista de viveros.");
+            });
+        }
+
+        function setupViveroDataListeners(viveroId) {
+            // History Listener
+            const historyColRef = collection(db, `artifacts/${appId}/users/${userId}/viveros/${viveroId}/soilAnalysisHistory`);
+            const qHistory = query(historyColRef, orderBy('timestamp', 'asc'));
+            onSnapshot(qHistory, (snapshot) => {
+                historyData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).reverse();
+                renderHistory();
+                updateCharts();
+            });
+
+            // Vivero Details Listener (for watering)
+            const viveroDocRef = doc(db, `artifacts/${appId}/users/${userId}/viveros/${viveroId}`);
+            onSnapshot(viveroDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const lastWatered = data.lastWateredDate ? data.lastWateredDate.toDate() : null;
+                    checkWateringReminder(lastWatered, data.wateringFrequency);
+                }
+            });
+        }
+
+        // --- Event Handlers ---
+        async function handleLoginOrCreateVivero() {
+            const name = viveroNameInput.value.trim();
+            const apellido = apellidoInput.value.trim();
+            if (!name || !apellido) {
+                showError(loginErrorDiv, 'Por favor, ingresa el nombre del vivero y tu apellido.');
+                return;
+            }
+            hideError(loginErrorDiv);
+            setButtonLoading(loginCreateBtn, true, 'Procesando...');
+
+            try {
+                const existingVivero = viverosList.find(v => v.name.toLowerCase() === name.toLowerCase());
+                if (existingVivero) {
+                    if (existingVivero.ownerApellido.toLowerCase() === apellido.toLowerCase()) {
+                        selectVivero(existingVivero.id, existingVivero.name);
+                    } else {
+                        showError(loginErrorDiv, 'Apellido incorrecto para este vivero.');
+                    }
+                } else {
+                    const viverosColRef = collection(db, `artifacts/${appId}/users/${userId}/viveros`);
+                    const newDoc = await addDoc(viverosColRef, {
+                        name: name,
+                        ownerApellido: apellido,
+                        creationTimestamp: serverTimestamp(),
+                        lastWateredDate: null,
+                        wateringFrequency: ''
+                    });
+                    selectVivero(newDoc.id, name);
+                }
+                viveroNameInput.value = '';
+                apellidoInput.value = '';
+            } catch (e) {
+                console.error("Error logging in or creating vivero:", e);
+                showError(loginErrorDiv, 'Ocurrió un error. Inténtalo de nuevo.');
+            } finally {
+                setButtonLoading(loginCreateBtn, false);
+            }
+        }
+
+        function handleSelectVivero(e) {
+            const id = e.target.dataset.id;
+            const name = e.target.dataset.name;
+            selectVivero(id, name);
+        }
+        
+        function selectVivero(id, name) {
+            selectedViveroId = id;
+            selectedViveroName = name;
+            activeViveroNameP.innerHTML = `Vivero Activo: <span class="text-green-700">${name}</span>`;
+            userIdDisplay.innerHTML = `ID de Usuario: <span class="font-mono break-all">${userId}</span>`;
+            showScreen(mainAppScreen);
+            setupViveroDataListeners(id);
+        }
+
+        async function handleDeleteVivero(e) {
+            const viveroId = e.target.dataset.id;
+            if (confirm(`¿Estás seguro de que quieres eliminar este vivero? Esta acción no se puede deshacer.`)) {
+                try {
+                    await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/viveros/${viveroId}`));
+                    alert("Vivero eliminado con éxito.");
+                } catch (err) {
+                    console.error("Error deleting vivero:", err);
+                    alert("Error al eliminar el vivero.");
+                }
+            }
+        }
+        
+        function handleLogout() {
+            selectedViveroId = null;
+            selectedViveroName = null;
+            historyData = [];
+            // Clear inputs and results
+            humidityInput.value = '';
+            phInput.value = '';
+            resultsSection.classList.add('hidden');
+            showScreen(viveroLoginScreen);
+        }
+
+        async function handleAnalyzeSoil() {
+            hideError(analysisErrorDiv);
+            const humidityValue = parseFloat(humidityInput.value);
+            const pHValue = parseFloat(phInput.value);
+
+            if (isNaN(humidityValue) || humidityValue < 0 || humidityValue > 100) {
+                showError(analysisErrorDiv, 'Introduce un valor de humedad válido (0-100%).');
+                return;
+            }
+            if (isNaN(pHValue) || pHValue < 0 || pHValue > 14) {
+                showError(analysisErrorDiv, 'Introduce un valor de pH válido (0-14).');
+                return;
+            }
+
+            setButtonLoading(analyzeSoilBtn, true);
+
+            try {
+                const prompt = `Eres un experto en agronomía. Basado en una humedad del suelo del ${humidityValue}% y un pH de ${pHValue}, proporciona una recomendación de riego detallada, incluyendo la frecuencia de riego ideal (ej. 'cada 2 días', 'semanalmente').
+                Además, sugiere 3-5 plantas florales y 3-5 plantas de huerta adecuadas. Para cada planta, incluye su nombre, tiempo de crecimiento aproximado y una breve explicación.
+                Responde en formato JSON con el esquema: {"watering_recommendation": "string", "watering_frequency": "string", "floral_plants": [{"name": "string", "growth_time": "string", "explanation": "string"}], "garden_plants": [{"name": "string", "growth_time": "string", "explanation": "string"}], "notes": "string"}`;
+                
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: "application/json" }
+                };
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates[0].content.parts[0].text) {
+                    const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
+                    displayResults(parsedJson, pHValue, humidityValue);
+                    
+                    const currentTimestamp = serverTimestamp();
+                    await updateDoc(doc(db, `artifacts/${appId}/users/${userId}/viveros/${selectedViveroId}`), {
+                        wateringFrequency: parsedJson.watering_frequency,
+                        lastWateredDate: currentTimestamp
+                    });
+
+                    await addDoc(collection(db, `artifacts/${appId}/users/${userId}/viveros/${selectedViveroId}/soilAnalysisHistory`), {
+                        humidity: humidityValue,
+                        pH: pHValue,
+                        timestamp: currentTimestamp,
+                        ...parsedJson
+                    });
+
+                } else {
+                    showError(analysisErrorDiv, 'No se pudo obtener una respuesta del modelo. Inténtalo de nuevo.');
+                }
+            } catch (err) {
+                console.error('Error analyzing soil:', err);
+                showError(analysisErrorDiv, 'Ocurrió un error al procesar la solicitud.');
+            } finally {
+                setButtonLoading(analyzeSoilBtn, false);
+            }
+        }
+
+        function displayResults(data, pHValue, humidityValue) {
+            // Overall Status
+            const phStatus = (pHValue >= 6.0 && pHValue <= 7.0) ? 'green' : ((pHValue >= 5.5 && pHValue < 6.0) || (pHValue > 7.0 && pHValue <= 7.5)) ? 'yellow' : 'red';
+            const humidityStatus = (humidityValue >= 40 && humidityValue <= 70) ? 'green' : ((humidityValue >= 20 && humidityValue < 40) || (humidityValue > 70 && humidityValue <= 85)) ? 'yellow' : 'red';
+            let statusColor = 'bg-green-500';
+            let statusText = 'Condiciones Óptimas';
+            if (phStatus === 'red' || humidityStatus === 'red') {
+                statusColor = 'bg-red-500';
+                statusText = 'Estado Crítico';
+            } else if (phStatus === 'yellow' || humidityStatus === 'yellow') {
+                statusColor = 'bg-yellow-500';
+                statusText = 'Se Requiere Atención';
+            }
+            overallStatusDiv.className = `flex items-center justify-center p-4 rounded-lg shadow-md text-white font-bold text-xl ${statusColor}`;
+            overallStatusDiv.innerHTML = statusText;
+
+            // Watering Rec
+            wateringRecommendationDiv.innerHTML = `<h3 class="font-semibold text-lg mb-2">💧 Recomendación de Riego:</h3><p class="text-gray-700 whitespace-pre-wrap">${data.watering_recommendation}</p><p class="text-gray-700 mt-2"><span class="font-semibold">Frecuencia Ideal:</span> ${data.watering_frequency || 'No especificado'}</p>`;
+            wateringRecommendationDiv.classList.remove('hidden');
+
+            // Floral Suggestions
+            if (data.floral_plants && data.floral_plants.length > 0) {
+                floralSuggestionsDiv.innerHTML = `<h3 class="font-semibold text-lg mb-2">🌸 Plantas Florales Sugeridas:</h3><ul class="list-disc list-inside text-gray-700 space-y-2">${data.floral_plants.map(p => `<li><span class="font-semibold">${p.name}</span> (${p.growth_time}): ${p.explanation}</li>`).join('')}</ul>`;
+                floralSuggestionsDiv.classList.remove('hidden');
+            } else {
+                floralSuggestionsDiv.classList.add('hidden');
+            }
+
+            // Garden Suggestions
+            if (data.garden_plants && data.garden_plants.length > 0) {
+                gardenSuggestionsDiv.innerHTML = `<h3 class="font-semibold text-lg mb-2">🥦 Plantas de Huerta Sugeridas:</h3><ul class="list-disc list-inside text-gray-700 space-y-2">${data.garden_plants.map(p => `<li><span class="font-semibold">${p.name}</span> (${p.growth_time}): ${p.explanation}</li>`).join('')}</ul>`;
+                gardenSuggestionsDiv.classList.remove('hidden');
+            } else {
+                gardenSuggestionsDiv.classList.add('hidden');
+            }
+            
+            resultsSection.classList.remove('hidden');
+        }
+
+        function handleDeleteHistoryClick(e) {
+            itemToDelete = e.currentTarget.dataset.id;
+            deleteModal.classList.remove('hidden');
+        }
+
+        async function confirmDelete() {
+            if (itemToDelete) {
+                try {
+                    await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/viveros/${selectedViveroId}/soilAnalysisHistory`, itemToDelete));
+                } catch (err) {
+                    console.error("Error deleting history item:", err);
+                    alert("Error al eliminar el elemento.");
+                } finally {
+                    cancelDelete();
+                }
+            }
+        }
+
+        function cancelDelete() {
+            itemToDelete = null;
+            deleteModal.classList.add('hidden');
+        }
+
+        function checkWateringReminder(lastWateredDate, wateringFrequency) {
+            if (!lastWateredDate || !wateringFrequency) {
+                wateringReminder.classList.add('hidden');
+                return;
+            }
+            const today = new Date();
+            let frequencyInDays = 0;
+            const lowerCaseFreq = wateringFrequency.toLowerCase();
+
+            if (lowerCaseFreq.includes('diario')) frequencyInDays = 1;
+            else if (lowerCaseFreq.includes('semanal')) frequencyInDays = 7;
+            else if (lowerCaseFreq.includes('mes')) frequencyInDays = 30;
+            else if (lowerCaseFreq.includes('anual')) frequencyInDays = 365;
+            else if (lowerCaseFreq.includes('cada')) {
+                const match = lowerCaseFreq.match(/(\d+)/);
+                if (match) frequencyInDays = parseInt(match[1], 10);
+            }
+
+            if (frequencyInDays > 0) {
+                const reminderPoint = new Date(lastWateredDate);
+                reminderPoint.setDate(reminderPoint.getDate() + Math.floor(frequencyInDays / 2));
+                const nextWatering = new Date(lastWateredDate);
+                nextWatering.setDate(nextWatering.getDate() + frequencyInDays);
+
+                if (today >= reminderPoint && today < nextWatering) {
+                    reminderFrequencyP.innerHTML = `Riego recomendado: <span class="font-semibold">${wateringFrequency}</span>`;
+                    wateringReminder.classList.remove('hidden');
+                } else {
+                    wateringReminder.classList.add('hidden');
+                }
+            } else {
+                wateringReminder.classList.add('hidden');
+            }
+        }
+        
+        async function handleMarkAsWatered() {
+            try {
+                await updateDoc(doc(db, `artifacts/${appId}/users/${userId}/viveros/${selectedViveroId}`), {
+                    lastWateredDate: serverTimestamp()
+                });
+                alert('¡Suelo regado y recordatorio actualizado!');
+                wateringReminder.classList.add('hidden');
+            } catch (e) {
+                console.error("Error marking as watered:", e);
+                alert("Error al actualizar la fecha de riego.");
+            }
+        }
+
+        // --- Initial Setup ---
+        window.addEventListener('DOMContentLoaded', () => {
+            initializeFirebase();
+            
+            // Store original button text
+            loginCreateBtn.dataset.originalText = loginCreateBtn.innerHTML;
+            analyzeSoilBtn.dataset.originalText = analyzeSoilBtn.innerHTML;
+
+            // Add event listeners
+            loginCreateBtn.addEventListener('click', handleLoginOrCreateVivero);
+            logoutBtn.addEventListener('click', handleLogout);
+            analyzeSoilBtn.addEventListener('click', handleAnalyzeSoil);
+            
+            viewHistoryBtn.addEventListener('click', () => {
+                analysisView.classList.add('hidden');
+                historyView.classList.remove('hidden');
+            });
+            backToAnalysisBtn.addEventListener('click', () => {
+                historyView.classList.add('hidden');
+                analysisView.classList.remove('hidden');
+            });
+            
+            cancelDeleteBtn.addEventListener('click', cancelDelete);
+            confirmDeleteBtn.addEventListener('click', confirmDelete);
+            markWateredBtn.addEventListener('click', handleMarkAsWatered);
+        });
+
+    </script>
+</body>
+</html>
